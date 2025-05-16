@@ -79,6 +79,11 @@ autocmd FileType markdown setlocal virtualedit=all
 autocmd FileType markdown setlocal spell spelllang=en_gb
 autocmd FileType markdown setlocal colorcolumn=
 autocmd FileType csv setlocal colorcolumn=
+" Show whitespace characters in markdown
+" Only show trailing spaces in markdown
+autocmd FileType markdown setlocal nolist
+autocmd FileType markdown setlocal list
+autocmd FileType markdown setlocal listchars=trail:·
 
 " Spell Highlights for Markdown
 augroup SpellCheckHighlight
@@ -297,9 +302,19 @@ vnoremap <leader>y "+y
 " Plugin Specific Configurations
 " ==========================================================================
 " Goyo Settings
-autocmd! User GoyoEnter nested call EnterGoyo()
+function! AdjustGoyoWidth()
+  let columns = &columns
+  if columns < 80
+    let g:goyo_width = columns
+  elseif columns < 120
+    let g:goyo_width = 80
+  else
+    let g:goyo_width = '60%'
+  endif
+endfunction
+
+autocmd! User GoyoEnter nested call AdjustGoyoWidth() | call EnterGoyo()
 autocmd! User GoyoLeave nested call LeaveGoyo()
-let g:goyo_width = '60%'
 
 " Limelight Settings
 let g:limelight_conceal_ctermfg = 'gray'
@@ -338,7 +353,6 @@ endfunction
 " Function to set non-active area as transparent when in Goyo
 function! EnterGoyo()
     highlight NormalNC guibg=NONE ctermbg=NONE
-    exec 'Limelight'
 endfunction
 
 " ==========================================================================
@@ -411,47 +425,31 @@ EOF
 " ==========================================================================
 lua << EOF
 vim.g.knap_settings = {
-
-    texoutputext = "pdf",
-    textopdf = "pdflatex -interaction=nonstopmode -synctex=1 %docroot%",
-    textopdfviewerlaunch = "sioyek %outputfile%",
-    textopdfviewerrefresh = "sioyek --reuse-instance %outputfile%",
-    textopdfforwardjump = nil,  -- Update this if SyncTeX is needed and supported by your viewer
-    textopdfshorterror = "A=%outputfile% ; LOGFILE=\"${A%.pdf}.log\"",
-
-    -- Markdown settings
-    mdoutputext = "html",
-    mdtopdf = nil,
-    mdtohtml = "pandoc %docroot% -o %outputfile%",
-    mdtohtmlviewerlaunch = "zathura %outputfile%",
-    mdtohtmlviewerrefresh = "zathura :reload",
-    mdtohtmlforwardjump = nil,
-    mdtohtmlshorterror = nil,
-
-    -- R Markdown (.Rmd) settings for PDF output
-    rmdoutputext = "pdf",
-    rmdtopdf = "Rscript -e \"rmarkdown::render('%docroot%', output_file='output.pdf')\" 2> /tmp/rmarkdown_error.log",
-    rmdtopdfviewerlaunch = "zathura output.pdf > /dev/null 2>&1 &",
-    rmdtopdfviewerrefresh = "pkill -USR1 zathura > /dev/null 2>&1 &",
+  mdoutputext = "pdf",
+  mdtopdf = "pandoc %docroot% -o %outputfile% --pdf-engine=pdflatex --template=$HOME/template.tex",
+  mdtopdfviewerlaunch = "sioyek %outputfile%",
+  mdtopdfviewerrefresh = ""
 }
-
 
 local kmap = vim.keymap.set
 local opts = { noremap = true, silent = true }
 
 local knap_ok, knap = pcall(require, 'knap')
 if knap_ok then
-    -- Process the document once and refresh the view
-    kmap({ 'n', 'v', 'i' }, '<F7>', function() knap.process_once() end, opts)
+    local kmap = vim.keymap.set
+    local opts = { noremap = true, silent = true }
 
-    -- Close the viewer application and reset settings
-    kmap({ 'n', 'v', 'i' }, '<F6>', function() knap.close_viewer() end, opts)
+    -- Manual process (Pandoc + PDF + launch viewer)
+    kmap({ 'n', 'v', 'i' }, '<C-m>', function() knap.process_once() end, opts)
 
-    -- Toggle auto-processing on and off
-    -- kmap({ 'n', 'v', 'i' }, '<F7>', function() knap.toggle_autopreviewing() end, opts)
+    -- Close viewer
+    kmap({ 'n', 'v', 'i' }, '<C-S-m>', function() knap.close_viewer() end, opts)
 
-    -- Invoke a forward search (e.g., SyncTeX for LaTeX)
-    -- kmap({ 'n', 'v', 'i' }, '<F8>', function() knap.forward_jump() end, opts)
+    -- Toggle autopreview
+    kmap({ 'n', 'v', 'i' }, '<C-A-m>', function() knap.toggle_autopreviewing() end, opts)
+
+    -- Forward search (if supported)
+    -- kmap({ 'n', 'v', 'i' }, '<C-F>', function() knap.forward_jump() end, opts)
 else
     print("Error: knap plugin not loaded")
 end
